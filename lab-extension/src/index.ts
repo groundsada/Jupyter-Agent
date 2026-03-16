@@ -19,7 +19,6 @@ import {
   JupyterFrontEndPlugin,
 } from '@jupyterlab/application';
 
-import { ITopBar } from '@jupyterlab/apputils';
 import { PageConfig } from '@jupyterlab/coreutils';
 import { ServerConnection } from '@jupyterlab/services';
 import { Widget } from '@lumino/widgets';
@@ -106,8 +105,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
   id: '@groundsada/jupyterhub-vscode:plugin',
   description: 'One-click "Open in VS Code" button for JupyterHub',
   autoStart: true,
-  optional: [ITopBar],
-  activate: (app: JupyterFrontEnd, topBar: ITopBar | null) => {
+  activate: (app: JupyterFrontEnd) => {
     const hubUser = PageConfig.getOption('hubUser');
     if (!hubUser) {
       console.log('[jhub-vscode] Not running under JupyterHub \u2014 skipping');
@@ -115,11 +113,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     }
 
     const button = new VSCodeButton(hubUser);
-    if (topBar) {
-      topBar.addItem('vscode-button', button);
-    } else {
-      app.shell.add(button, 'top', { rank: 1000 });
-    }
+    app.shell.add(button, 'top', { rank: 1000 });
   },
 };
 
