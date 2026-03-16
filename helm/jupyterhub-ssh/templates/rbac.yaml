@@ -1,0 +1,78 @@
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jhub-ssh-secret-manager
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jhub-ssh-secret-manager
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.rbac.hubServiceAccountName }}
+    namespace: {{ .Values.hub.namespace }}
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: jhub-ssh-secret-manager
+{{- end }}
+
+{{- if .Values.gateway.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.gateway.serviceAccount.name }}
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+{{- end }}
+
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jhub-user-pod-ingress
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml .Values.networkPolicy.userPodSelector | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jhub-ssh-gateway
+      ports:
+        - protocol: TCP
+          port: {{ .Values.gateway.sidecarSSHPort }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jhub-ssh-gateway
+      ports:
+        - protocol: TCP
+          port: 1024
+          endPort: 65535
+    - from:
+        - podSelector:
+            matchLabels:
+              component: hub
+{{- end }}

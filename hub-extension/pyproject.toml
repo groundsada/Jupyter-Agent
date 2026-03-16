@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "jupyterhub-ssh"
+version = "0.1.0"
+description = "SSH access and VS Code integration for JupyterHub"
+requires-python = ">=3.9"
+dependencies = [
+    "jupyterhub>=4.0",
+    "kubernetes-asyncio>=24.0",
+]
+
+[project.optional-dependencies]
+crypto = ["cryptography>=41.0"]
+dev   = ["pytest>=7", "anyio>=4"]

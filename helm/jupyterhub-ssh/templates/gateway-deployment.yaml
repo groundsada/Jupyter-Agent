@@ -1,0 +1,92 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "jupyterhub-ssh.fullname" . }}-gateway
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+    app: jhub-ssh-gateway
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels:
+      app: jhub-ssh-gateway
+  template:
+    metadata:
+      labels:
+        app: jhub-ssh-gateway
+        {{- include "jupyterhub-ssh.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.gateway.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          args:
+            - serve
+            - --addr=:{{ .Values.gateway.sshPort }}
+            - --hub={{ .Values.hub.baseUrl }}
+            - --ssh-port={{ .Values.sidecar.sidecarSSHPort | default .Values.gateway.sidecarSSHPort }}
+          env:
+            - name: JUPYTERHUB_API_TOKEN
+              {{- if .Values.hub.adminToken }}
+              value: {{ .Values.hub.adminToken | quote }}
+              {{- else if .Values.hub.adminTokenSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hub.adminTokenSecretRef.name }}
+                  key: {{ .Values.hub.adminTokenSecretRef.key }}
+              {{- else }}
+              value: ""
+              {{- end }}
+          ports:
+            - name: ssh-ws
+              containerPort: {{ .Values.gateway.sshPort }}
+            - name: portfwd
+              containerPort: {{ .Values.gateway.portfwdPort }}
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.gateway.sshPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.gateway.sshPort }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "jupyterhub-ssh.fullname" . }}-gateway
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+    app: jhub-ssh-gateway
+spec:
+  selector:
+    app: jhub-ssh-gateway
+  ports:
+    - name: ssh-ws
+      port: {{ .Values.gateway.sshPort }}
+      targetPort: ssh-ws
+    - name: portfwd
+      port: {{ .Values.gateway.portfwdPort }}
+      targetPort: portfwd
+  type: ClusterIP
+{{- end }}

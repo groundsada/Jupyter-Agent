@@ -1,0 +1,119 @@
+# jupyterhub-ssh Helm chart values
+# Override these in your values override file.
+
+# ── Hub configuration ─────────────────────────────────────────────────────────
+hub:
+  # Base URL of your JupyterHub installation (no trailing slash)
+  baseUrl: "https://jupyter.example.com"
+
+  # JupyterHub admin API token for the gateway to use.
+  # The token must have admin read access (to look up users and servers).
+  # Create via: jupyterhub token --user admin
+  # Or set as a JupyterHub service token in jupyterhub_config.py.
+  adminToken: ""
+
+  # Kubernetes secret containing the admin token (alternative to adminToken above).
+  # The secret must have a key named "token".
+  adminTokenSecretRef:
+    name: ""
+    key: "token"
+
+  # Kubernetes namespace where JupyterHub is installed.
+  namespace: jupyterhub
+
+  # Name of the JupyterHub proxy service (used in ingress backend).
+  proxyServiceName: proxy-public
+
+# ── Domain configuration ──────────────────────────────────────────────────────
+domain:
+  # Base domain for JupyterHub (apex + wildcard TLS cert covers this).
+  base: "jupyter.example.com"
+
+# ── SSH gateway ───────────────────────────────────────────────────────────────
+gateway:
+  enabled: true
+
+  image:
+    repository: ghcr.io/groundsada/jhub-ssh-gateway
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+  # Port the SSH WebSocket relay listens on inside the container
+  sshPort: 8022
+
+  # Port the port-forwarding proxy listens on inside the container
+  portfwdPort: 8080
+
+  # Port the SSH sidecar listens on inside user pods
+  sidecarSSHPort: 2222
+
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+
+  serviceAccount:
+    create: true
+    name: jhub-ssh-gateway
+
+# ── SSH sidecar ───────────────────────────────────────────────────────────────
+sidecar:
+  image:
+    repository: ghcr.io/groundsada/jhub-ssh-sidecar
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+  # If users have a persistent home PVC, set the volume name here.
+  # The sidecar will share this volume instead of creating an emptyDir.
+  homePVCVolumeName: ""
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+
+  # TLS secret name. Must cover both apex and wildcard domains.
+  # Create this with cert-manager (see docs/INSTALL.md).
+  tlsSecretName: jupyter-wildcard-tls
+
+  # If true, annotate ingress to use cert-manager for TLS.
+  certManager:
+    enabled: true
+    clusterIssuer: letsencrypt-prod-dns
+
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+
+# ── Network policy ────────────────────────────────────────────────────────────
+networkPolicy:
+  # Create a NetworkPolicy restricting user pod ingress to gateway only.
+  enabled: true
+
+  # KubeSpawner labels user pods with component=singleuser-server by default.
+  userPodSelector:
+    component: singleuser-server
+
+# ── RBAC ─────────────────────────────────────────────────────────────────────
+rbac:
+  # Create Role + RoleBinding allowing hub ServiceAccount to manage SSH key Secrets.
+  create: true
+
+  # Name of the JupyterHub hub ServiceAccount (default: "hub").
+  hubServiceAccountName: hub
+
+# ── VS Code integration ───────────────────────────────────────────────────────
+vscode:
+  enabled: true
+  # Adds the /api/users/{name}/vscode-connect endpoint to the hub.
+  # Requires jupyterhub-ssh Python package to be installed in the hub image.

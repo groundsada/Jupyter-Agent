@@ -1,0 +1,89 @@
+# cert-manager resources for wildcard TLS certificate
+#
+# Prerequisites:
+#   1. cert-manager installed: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+#   2. DNS provider credentials configured (see your provider's cert-manager docs)
+#   3. Replace <YOUR_EMAIL>, <YOUR_DNS_PROVIDER>, and secret references below
+#
+# This uses a DNS-01 ACME challenge because wildcard certs REQUIRE DNS-01.
+# HTTP-01 challenges cannot issue *.example.com certificates.
+
+---
+# ClusterIssuer: Let's Encrypt production via DNS-01
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod-dns
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: <YOUR_EMAIL>
+    privateKeySecretRef:
+      name: letsencrypt-prod-dns-key
+    solvers:
+      - dns01:
+          # ── Route53 (AWS) ──────────────────────────────────────────────────
+          # route53:
+          #   region: us-east-1
+          #   accessKeyIDSecretRef:
+          #     name: route53-credentials
+          #     key: access-key-id
+          #   secretAccessKeySecretRef:
+          #     name: route53-credentials
+          #     key: secret-access-key
+
+          # ── Cloudflare ─────────────────────────────────────────────────────
+          # cloudflare:
+          #   apiTokenSecretRef:
+          #     name: cloudflare-api-token
+          #     key: api-token
+
+          # ── Google Cloud DNS ───────────────────────────────────────────────
+          # clouddns:
+          #   project: <YOUR_GCP_PROJECT>
+          #   serviceAccountSecretRef:
+          #     name: clouddns-sa
+          #     key: key.json
+
+          # ── Generic webhook (for other providers) ──────────────────────────
+          webhook:
+            groupName: <YOUR_DNS_PROVIDER>
+            solverName: <YOUR_DNS_PROVIDER>
+            config: {}
+
+---
+# Certificate: wildcard + apex for jupyter.example.com
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jupyter-wildcard-tls
+  namespace: jupyterhub      # Must be in the same namespace as the Ingress
+spec:
+  secretName: jupyter-wildcard-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - jupyter.example.com        # apex domain (JupyterHub login page)
+    - "*.jupyter.example.com"    # wildcard (port forwarding + SSH gateway)
+  # Cert is renewed automatically by cert-manager when < 30 days remain
+  renewBefore: 720h  # 30 days
+
+---
+# Staging issuer for testing (avoids Let's Encrypt rate limits)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging-dns
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: <YOUR_EMAIL>
+    privateKeySecretRef:
+      name: letsencrypt-staging-dns-key
+    solvers:
+      - dns01:
+          webhook:
+            groupName: <YOUR_DNS_PROVIDER>
+            solverName: <YOUR_DNS_PROVIDER>
+            config: {}

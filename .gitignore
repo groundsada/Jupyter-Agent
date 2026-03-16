@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.venv/
+venv/
+
+# Go
+gateway/jhub-ssh
+gateway/jhub-ssh-*
+dist/
+
+# Node
+node_modules/
+out/
+*.vsix
+lab-extension/lib/
+vscode-extension/out/
+vscode-extension/bin/
+
+# Secrets / local config
+*.env
+.env.*
+secrets/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/settings.json
+.idea/

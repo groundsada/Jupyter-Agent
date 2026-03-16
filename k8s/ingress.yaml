@@ -1,0 +1,167 @@
+# Kubernetes Ingress — JupyterHub + SSH Gateway + Port Forwarding
+#
+# Requires:
+#   - ingress-nginx controller installed
+#   - cert-manager + wildcard certificate (see cert-manager.yaml)
+#   - DNS wildcard record: *.jupyter.example.com → ingress LB IP
+#
+# Replace jupyter.example.com with your actual domain.
+#
+# Two Ingress resources are used because nginx requires separate rules
+# for exact hosts vs wildcard hosts.
+
+---
+# Ingress 1: Apex domain (jupyter.example.com)
+# Routes:
+#   /ssh/*          → jhub-ssh-gateway (WebSocket SSH relay)
+#   /               → JupyterHub proxy-public (existing)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jupyterhub-apex
+  namespace: jupyterhub
+  annotations:
+    # ingress-nginx
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # WebSocket support (required for SSH relay and Jupyter kernels)
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+    # TLS managed by cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod-dns"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - jupyter.example.com
+        - "*.jupyter.example.com"
+      secretName: jupyter-wildcard-tls
+  rules:
+    - host: jupyter.example.com
+      http:
+        paths:
+          # SSH gateway WebSocket endpoint
+          - path: /ssh
+            pathType: Prefix
+            backend:
+              service:
+                name: jhub-ssh-gateway
+                port:
+                  name: ssh-ws
+          # Everything else → JupyterHub
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: proxy-public   # default JupyterHub service name
+                port:
+                  number: 80
+
+---
+# Ingress 2: Wildcard subdomain (*.jupyter.example.com)
+# Routes everything to the port-forwarding proxy.
+# The proxy parses the subdomain to extract port and username.
+#
+# Note: nginx supports wildcard hosts in Ingress since v0.25.
+# The wildcard must be a single-level wildcard (*.example.com).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jupyterhub-wildcard
+  namespace: jupyterhub
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      # Pass the original Host header so the proxy can parse the subdomain
+      proxy_set_header Host $host;
+    cert-manager.io/cluster-issuer: "letsencrypt-prod-dns"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "*.jupyter.example.com"
+      secretName: jupyter-wildcard-tls
+  rules:
+    - host: "*.jupyter.example.com"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jhub-ssh-gateway
+                port:
+                  name: portfwd
+
+---
+# NetworkPolicy: restrict which pods can talk to user pods
+# Only the SSH gateway and port-forwarding proxy can reach the SSH sidecar
+# and user notebook ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jhub-user-pod-ingress
+  namespace: jupyterhub
+spec:
+  podSelector:
+    matchLabels:
+      component: singleuser-server   # KubeSpawner labels user pods with this
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow SSH gateway to reach SSH sidecar on port 2222
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jhub-ssh-gateway
+      ports:
+        - protocol: TCP
+          port: 2222
+    # Allow port-fwd proxy to reach any high port on user pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jhub-ssh-gateway
+      ports:
+        - protocol: TCP
+          port: 1024
+          endPort: 65535
+    # Allow JupyterHub hub to reach user pods (existing requirement)
+    - from:
+        - podSelector:
+            matchLabels:
+              component: hub
+
+---
+# RBAC: hub ServiceAccount needs to read/write Secrets (for SSH key storage)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jhub-ssh-secret-manager
+  namespace: jupyterhub
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    # Only secrets named jhub-ssh-pubkey-* (enforced via naming convention)
+    verbs: ["get", "create", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jhub-ssh-secret-manager
+  namespace: jupyterhub
+subjects:
+  - kind: ServiceAccount
+    name: hub           # JupyterHub's default ServiceAccount name
+    namespace: jupyterhub
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: jhub-ssh-secret-manager

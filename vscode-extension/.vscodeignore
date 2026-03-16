@@ -1,0 +1,9 @@
+**/*.ts
+**/*.map
+!out/**
+node_modules/**
+.vscode/**
+src/**
+tsconfig*.json
+*.test.js
+.github/**

@@ -1,0 +1,47 @@
+# JupyterHub SSH Sidecar — sshd_config
+# Runs on port 2222 as non-root (UID 1000 / jovyan)
+
+Port 2222
+AddressFamily any
+ListenAddress 0.0.0.0
+
+# Host keys are generated at container startup into /tmp/ssh
+HostKey /tmp/ssh/ssh_host_rsa_key
+HostKey /tmp/ssh/ssh_host_ed25519_key
+
+# Auth — public key only, no passwords
+PubkeyAuthentication yes
+AuthorizedKeysFile /home/jovyan/.ssh/authorized_keys
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+
+# Allow TCP port forwarding (used by `ssh -L` to reach notebook ports locally)
+AllowTcpForwarding yes
+GatewayPorts no
+X11Forwarding no
+
+# SFTP subsystem
+Subsystem sftp /usr/lib/ssh/sftp-server
+
+# Keep connections alive
+ClientAliveInterval 30
+ClientAliveCountMax 3
+TCPKeepAlive yes
+
+# Logging — goes to stderr so Kubernetes picks it up
+SyslogFacility AUTH
+LogLevel INFO
+
+# Only allow the notebook user
+AllowUsers jovyan
+
+# Disable PAM — not available in minimal Alpine image
+UsePAM no
+
+# No DNS lookups (speeds up connection in pods)
+UseDNS no
+
+# Pid file in writable location (running as non-root)
+PidFile /tmp/ssh/sshd.pid

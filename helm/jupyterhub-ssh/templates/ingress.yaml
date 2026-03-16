@@ -1,0 +1,76 @@
+{{- if .Values.ingress.enabled }}
+---
+# Apex domain ingress: jupyter.example.com
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "jupyterhub-ssh.fullname" . }}-apex
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.certManager.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.certManager.clusterIssuer | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.domain.base }}
+        - "*.{{ .Values.domain.base }}"
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.domain.base }}
+      http:
+        paths:
+          - path: /ssh
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "jupyterhub-ssh.fullname" . }}-gateway
+                port:
+                  name: ssh-ws
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.hub.proxyServiceName }}
+                port:
+                  number: 80
+---
+# Wildcard subdomain ingress: *.jupyter.example.com → port-forwarding proxy
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "jupyterhub-ssh.fullname" . }}-wildcard
+  namespace: {{ .Values.hub.namespace }}
+  labels:
+    {{- include "jupyterhub-ssh.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.certManager.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.certManager.clusterIssuer | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - "*.{{ .Values.domain.base }}"
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: "*.{{ .Values.domain.base }}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "jupyterhub-ssh.fullname" . }}-gateway
+                port:
+                  name: portfwd
+{{- end }}

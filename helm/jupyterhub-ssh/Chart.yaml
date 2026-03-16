@@ -1,0 +1,17 @@
+apiVersion: v2
+name: jupyterhub-ssh
+description: >
+  SSH access, wildcard port forwarding, and VS Code integration for JupyterHub.
+  Deploys the jhub-ssh gateway alongside an existing JupyterHub Helm installation.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - jupyterhub
+  - ssh
+  - vscode
+  - port-forwarding
+home: https://github.com/groundsada/jupyter-ssh
+maintainers:
+  - name: groundsada
+dependencies: []

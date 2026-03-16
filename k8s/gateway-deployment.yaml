@@ -1,0 +1,120 @@
+# SSH Gateway + Port-Forwarding Proxy — Kubernetes Deployment
+#
+# This single deployment runs both the SSH gateway (port 8022) and the
+# port-forwarding proxy (port 8080) in the same pod (same Go binary).
+#
+# Replace:
+#   <YOUR_REGISTRY>   — your container registry
+#   <YOUR_HUB_TOKEN>  — JupyterHub service token with admin read access
+#   jupyter.example.com — your actual JupyterHub domain
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jhub-ssh-gateway
+  namespace: jupyterhub
+
+---
+# Secret holding the JupyterHub admin API token for the gateway.
+# In production, use an external secrets manager (Vault, ESO, etc.)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jhub-ssh-gateway-token
+  namespace: jupyterhub
+type: Opaque
+stringData:
+  token: "<YOUR_HUB_TOKEN>"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jhub-ssh-gateway
+  namespace: jupyterhub
+  labels:
+    app: jhub-ssh-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jhub-ssh-gateway
+  template:
+    metadata:
+      labels:
+        app: jhub-ssh-gateway
+    spec:
+      serviceAccountName: jhub-ssh-gateway
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # nobody
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: <YOUR_REGISTRY>/jhub-ssh-gateway:latest
+          args:
+            - serve
+            - --addr=:8022
+            - --hub=https://jupyter.example.com
+            - --ssh-port=2222
+          env:
+            - name: JUPYTERHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: jhub-ssh-gateway-token
+                  key: token
+          ports:
+            - name: ssh-ws
+              containerPort: 8022
+              protocol: TCP
+            - name: portfwd
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8022
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8022
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jhub-ssh-gateway
+  namespace: jupyterhub
+  labels:
+    app: jhub-ssh-gateway
+spec:
+  selector:
+    app: jhub-ssh-gateway
+  ports:
+    - name: ssh-ws
+      port: 8022
+      targetPort: ssh-ws
+      protocol: TCP
+    - name: portfwd
+      port: 8080
+      targetPort: portfwd
+      protocol: TCP
+  type: ClusterIP
