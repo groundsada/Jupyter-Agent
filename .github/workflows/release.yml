@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write      # create GitHub release + upload assets
   packages: write      # push to ghcr.io
+  id-token: write      # OIDC token for PyPI trusted publishing
 
 jobs:
   # ── 1. Build Go binaries for all platforms ──────────────────────────────────
@@ -191,16 +192,15 @@ jobs:
             --out jhub-vscode-${{ matrix.target }}.vsix
         working-directory: vscode-extension
 
-      - name: Publish to marketplace
-        run: |
-          npx vsce publish \
-            --target ${{ matrix.target }} \
-            --packagePath jhub-vscode-${{ matrix.target }}.vsix
-        working-directory: vscode-extension
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      # Marketplace publish skipped (requires paid Azure account + VSCE_PAT secret)
+      # To enable: uncomment and add VSCE_PAT secret + register publisher at marketplace.visualstudio.com
+      # - name: Publish to marketplace
+      #   run: npx vsce publish --target ${{ matrix.target }} --packagePath jhub-vscode-${{ matrix.target }}.vsix
+      #   working-directory: vscode-extension
+      #   env:
+      #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
-      # Also attach .vsix to the GitHub release for manual installs
+      # Attach .vsix to the GitHub release for manual installs
       - name: Upload .vsix to release
         uses: softprops/action-gh-release@v2
         with:
@@ -224,7 +224,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: hub-extension/dist/
-          password: ${{ secrets.PYPI_API_TOKEN }}
 
   # ── 6. Publish Helm chart to GitHub Pages (OCI) ─────────────────────────────
   publish-helm:
