@@ -2,7 +2,13 @@
   "name": "@groundsada/jupyterhub-vscode",
   "version": "0.1.0",
   "description": "JupyterLab extension: Open in VS Code via SSH",
-  "keywords": ["jupyter", "jupyterlab", "jupyterlab-extension", "vscode", "ssh"],
+  "keywords": [
+    "jupyter",
+    "jupyterlab",
+    "jupyterlab-extension",
+    "vscode",
+    "ssh"
+  ],
   "homepage": "https://github.com/groundsada/jupyter-ssh",
   "license": "MIT",
   "main": "lib/index.js",
@@ -41,12 +47,13 @@
   },
   "jupyterlab": {
     "extension": true,
-    "outputDir": "jupyterhub_vscode/labextension",
-    "schemaDir": "schema"
+    "outputDir": "jhub_vscode_labext/labextension"
   },
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "jsdom",
-    "testMatch": ["**/src/**/*.test.ts"]
+    "testMatch": [
+      "**/src/**/*.test.ts"
+    ]
   }
 }

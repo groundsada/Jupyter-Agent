@@ -206,24 +206,39 @@ jobs:
         with:
           files: vscode-extension/jhub-vscode-${{ matrix.target }}.vsix
 
-  # ── 5. Publish Python package to PyPI ───────────────────────────────────────
+  # ── 5. Publish Python packages to PyPI ──────────────────────────────────────
   publish-python:
-    name: Publish Python package
+    name: Publish Python packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Build wheel
+
+      - name: Build hub-extension wheel
         run: |
           pip install build
           python -m build
         working-directory: hub-extension
-      - name: Publish to PyPI
+
+      - name: Build lab-extension wheel
+        run: |
+          pip install build jupyterlab~=4.0 hatch-jupyter-builder
+          npm install
+          npm run build:prod
+          python -m build
+        working-directory: lab-extension
+
+      - name: Publish both packages to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: hub-extension/dist/
+          packages-dir: |
+            hub-extension/dist/
+            lab-extension/dist/
 
   # ── 6. Publish Helm chart to GitHub Pages (OCI) ─────────────────────────────
   publish-helm:

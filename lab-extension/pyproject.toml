@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.5.0", "jupyterlab>=4.0.0,<5", "hatch-jupyter-builder>=0.5"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jhub-vscode-labext"
+version = "0.1.4"
+description = "One-click 'Open in VS Code' button for JupyterHub"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+keywords = ["JupyterLab", "JupyterHub", "VS Code", "SSH"]
+classifiers = [
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 4",
+    "Framework :: Jupyter :: JupyterLab :: Extensions",
+    "Framework :: Jupyter :: JupyterLab :: Extensions :: Prebuilt",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/groundsada/Jupyter-Agent"
+
+[tool.hatch.version]
+path = "jhub_vscode_labext/_version.py"
+
+[tool.hatch.build.targets.wheel]
+artifacts = ["jhub_vscode_labext/labextension"]
+
+[tool.hatch.build.targets.sdist]
+artifacts = ["jhub_vscode_labext/labextension"]
+
+[tool.hatch.build.hooks.jupyter-builder]
+dependencies = ["hatch-jupyter-builder>=0.5"]
+build-function = "hatch_jupyter_builder.npm_builder"
+ensured-targets = [
+    "jhub_vscode_labext/labextension/static/style.js",
+    "jhub_vscode_labext/labextension/package.json",
+]
+skip-if-exists = ["jhub_vscode_labext/labextension/static/style.js"]
+
+[tool.hatch.build.hooks.jupyter-builder.build-kwargs]
+build_cmd = "build:prod"
+npm = ["npm"]
+
+[tool.jupyter-releaser.options]
+version-cmd = "hatch version"
+
+[tool.jupyter-releaser.hooks]
+before-build-npm = ["python -m pip install jupyterlab~=4.0", "npm install", "npm run build:prod"]
+before-build-python = ["npm run build:prod"]
