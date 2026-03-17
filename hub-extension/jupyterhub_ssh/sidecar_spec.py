@@ -78,15 +78,13 @@ def ssh_sidecar_container(
             "periodSeconds": 30,
             "failureThreshold": 3,
         },
-        # sshd needs root to bind + setuid; drops to jovyan for sessions.
-        # If your cluster policy forbids root sidecars, use the Go sidecar
-        # variant (Task 2 alt) which runs fully non-root.
+        # Runs fully non-root as jovyan (UID 1000) with UsePrivilegeSeparation=no.
+        # No elevated capabilities needed — compatible with restrictive cluster policies.
         "securityContext": {
-            "runAsUser": 0,
+            "runAsUser": 1000,
+            "runAsGroup": 1000,
             "allowPrivilegeEscalation": False,
             "capabilities": {
-                # sshd needs SETUID/SETGID to drop privileges to the session user.
-                "add": ["SETUID", "SETGID"],
                 "drop": ["ALL"],
             },
         },

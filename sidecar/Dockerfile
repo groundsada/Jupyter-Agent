@@ -26,9 +26,10 @@ RUN chmod +x /entrypoint.sh
 RUN mkdir -p /tmp/ssh /home/jovyan/.ssh \
     && chown -R jovyan:jovyan /tmp/ssh /home/jovyan
 
-# sshd needs to run as root to bind and setuid, but drops privileges to jovyan
-# for the actual session. The entrypoint runs as root.
-USER root
+# Run entirely as jovyan (UID 1000) — no SETUID/SETGID needed.
+# UsePrivilegeSeparation is disabled in sshd_config so sshd doesn't
+# try to fork a privileged child process.
+USER jovyan
 
 EXPOSE 2222
 

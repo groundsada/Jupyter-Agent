@@ -40,6 +40,10 @@ AllowUsers jovyan
 # Disable PAM — not available in minimal Alpine image
 UsePAM no
 
+# Run without privilege separation so sshd doesn't need SETUID/SETGID.
+# Safe here because the process already runs as the session user (jovyan).
+UsePrivilegeSeparation no
+
 # No DNS lookups (speeds up connection in pods)
 UseDNS no
 
