@@ -12,23 +12,14 @@ Usage in jupyterhub_config.py:
 """
 
 import logging
-import sys
-import os
 
-log = logging.getLogger(__name__)
-
-# Allow importing sidecar_spec from the sibling sidecar/ directory when
-# running tests without installing the full package.
-_SIDECAR_SPEC_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "sidecar"
+from jupyterhub_ssh.sidecar_spec import (
+    ssh_sidecar_container,
+    ssh_shared_volume,
+    ssh_shared_volume_mount,
 )
 
-
-def _import_sidecar_spec():
-    if _SIDECAR_SPEC_PATH not in sys.path:
-        sys.path.insert(0, _SIDECAR_SPEC_PATH)
-    from sidecar_spec import ssh_sidecar_container, ssh_shared_volume, ssh_shared_volume_mount
-    return ssh_sidecar_container, ssh_shared_volume, ssh_shared_volume_mount
+log = logging.getLogger(__name__)
 
 
 def make_ssh_pre_spawn_hook(
@@ -53,8 +44,6 @@ def make_ssh_pre_spawn_hook(
     if key_store is None:
         from jupyterhub_ssh.keys import KubernetesSecretKeyStore
         key_store = KubernetesSecretKeyStore(namespace=namespace)
-
-    ssh_sidecar_container, ssh_shared_volume, ssh_shared_volume_mount = _import_sidecar_spec()
 
     async def pre_spawn_hook(spawner):
         username = spawner.user.name
