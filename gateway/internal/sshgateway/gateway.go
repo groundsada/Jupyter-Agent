@@ -112,7 +112,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	podIP, err := h.Hub.DefaultServerPodIP(userInfo)
+	podIP, err := h.Hub.DefaultServerPodIP(r.Context(), userInfo)
 	if err != nil {
 		if errors.Is(err, hubclient.ErrServerNotReady) {
 			http.Error(w, "server not running — start it from JupyterHub first", http.StatusServiceUnavailable)

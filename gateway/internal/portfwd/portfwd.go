@@ -156,7 +156,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	podIP, err := h.Hub.DefaultServerPodIP(userInfo)
+	podIP, err := h.Hub.DefaultServerPodIP(r.Context(), userInfo)
 	if err != nil {
 		if errors.Is(err, hubclient.ErrServerNotReady) {
 			startURL := fmt.Sprintf("%s/hub/user/%s", h.Hub.BaseURL, sub.Username)

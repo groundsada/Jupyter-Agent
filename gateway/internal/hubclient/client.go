@@ -133,25 +133,70 @@ func (c *Client) ValidateToken(ctx context.Context, token string) (*TokenInfo, e
 // DefaultServerPodIP returns the hostname (or IP) to reach the user's SSH sidecar.
 //
 // Strategy (in order):
-//  1. KubeSpawner's state.dns_name — the pod's in-cluster DNS name (preferred).
-//  2. Parse the internal URL if it starts with http:// and contains an IP.
-func (c *Client) DefaultServerPodIP(user *UserInfo) (string, error) {
+//  1. Query the hub proxy routing table (/hub/api/proxy) — the target is the
+//     internal http://<pod-ip>:<port>/user/…  URL that KubeSpawner registers.
+//  2. KubeSpawner's state.dns_name (works when a per-user headless Service exists).
+//  3. Parse the internal URL from server.URL if it happens to contain an IP.
+func (c *Client) DefaultServerPodIP(ctx context.Context, user *UserInfo) (string, error) {
 	server, ok := user.Servers[""]
 	if !ok || !server.Ready {
 		return "", ErrServerNotReady
 	}
 
-	// 1. Prefer the KubeSpawner dns_name from server state.
+	// 1. Query the JupyterHub proxy routing table.
+	// The proxy maps "/user/<name>/" → "http://<pod-ip>:<port>/user/<name>/".
+	if ip, err := c.podIPFromProxy(ctx, user.Name); err == nil {
+		return ip, nil
+	}
+
+	// 2. Try KubeSpawner's state.dns_name (requires per-user headless Service).
 	if dns := server.State.DNSName; dns != "" {
 		return dns, nil
 	}
 
-	// 2. Fall back: try to parse an IP from an internal server URL.
+	// 3. Last resort: parse an IP from the server URL itself.
 	ip, err := extractIPFromServerURL(server.URL)
 	if err != nil {
-		return "", fmt.Errorf("could not locate pod address (state.dns_name empty, URL parse failed: %w)", err)
+		return "", fmt.Errorf("could not locate pod address: %w", err)
 	}
 	return ip, nil
+}
+
+// podIPFromProxy queries /hub/api/proxy and returns the pod IP for the user's
+// default server by looking up the "/user/<name>/" route target.
+func (c *Client) podIPFromProxy(ctx context.Context, username string) (string, error) {
+	url := fmt.Sprintf("%s/hub/api/proxy", c.BaseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "token "+c.AdminToken)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GET %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET %s: status %d", url, resp.StatusCode)
+	}
+
+	// Response is a map of path → {target: "http://<pod-ip>:<port>/user/…"}
+	var routes map[string]struct {
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&routes); err != nil {
+		return "", fmt.Errorf("decode proxy routes: %w", err)
+	}
+
+	routeKey := "/user/" + username + "/"
+	entry, ok := routes[routeKey]
+	if !ok || entry.Target == "" {
+		return "", fmt.Errorf("no proxy route for %q", routeKey)
+	}
+	return extractIPFromServerURL(entry.Target)
 }
 
 // extractIPFromServerURL parses "http://10.0.1.42:8888/user/alice/" → "10.0.1.42".
