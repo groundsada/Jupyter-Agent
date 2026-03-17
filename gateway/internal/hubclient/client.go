@@ -36,21 +36,31 @@ type UserInfo struct {
 	Servers map[string]Server `json:"servers"`
 }
 
+// ServerState holds KubeSpawner-specific state embedded in a server record.
+type ServerState struct {
+	PodName   string `json:"pod_name"`
+	Namespace string `json:"namespace"`
+	DNSName   string `json:"dns_name"` // e.g. "jupyter-alice.ns.svc.cluster.local"
+}
+
 // Server represents a single-user server entry from the JupyterHub API.
 type Server struct {
-	Name    string `json:"name"`
-	Ready   bool   `json:"ready"`
+	Name    string      `json:"name"`
+	Ready   bool        `json:"ready"`
 	// URL is the hub-relative URL path, e.g. "/user/alice/"
-	URL     string `json:"url"`
+	URL     string      `json:"url"`
+	State   ServerState `json:"state"`
 	// UserOptions contains spawner-specific data; we use it to extract pod IP.
 	UserOptions map[string]interface{} `json:"user_options"`
 }
 
 // TokenInfo is returned by /hub/api/authorizations/token/<token>.
 type TokenInfo struct {
-	Name   string `json:"name"`   // username
-	Token  string `json:"token"`
+	Name   string   `json:"name"`   // username or service name
+	Token  string   `json:"token"`
 	Scopes []string `json:"scopes"`
+	Kind   string   `json:"kind"`  // "user" or "service"
+	Admin  bool     `json:"admin"` // true when the token has admin rights
 }
 
 // GetUser returns information about a JupyterHub user.
@@ -120,22 +130,26 @@ func (c *Client) ValidateToken(ctx context.Context, token string) (*TokenInfo, e
 	return &info, nil
 }
 
-// DefaultServerPodIP returns the pod IP for a user's default server.
+// DefaultServerPodIP returns the hostname (or IP) to reach the user's SSH sidecar.
 //
-// JupyterHub's API does not directly expose pod IPs, but KubeSpawner stores
-// the pod IP as the server's "ip" field in the kernel gateway URL.
-// We derive it from the server's internal URL (e.g. "http://10.0.1.42:8888/user/alice/").
+// Strategy (in order):
+//  1. KubeSpawner's state.dns_name — the pod's in-cluster DNS name (preferred).
+//  2. Parse the internal URL if it starts with http:// and contains an IP.
 func (c *Client) DefaultServerPodIP(user *UserInfo) (string, error) {
 	server, ok := user.Servers[""]
 	if !ok || !server.Ready {
 		return "", ErrServerNotReady
 	}
-	// The server URL stored in JupyterHub DB for KubeSpawner looks like
-	// "http://<pod-ip>:<port>/user/<name>/". We parse out just the IP.
-	// Fall back to querying the hub proxy if we can't parse it.
+
+	// 1. Prefer the KubeSpawner dns_name from server state.
+	if dns := server.State.DNSName; dns != "" {
+		return dns, nil
+	}
+
+	// 2. Fall back: try to parse an IP from an internal server URL.
 	ip, err := extractIPFromServerURL(server.URL)
 	if err != nil {
-		return "", fmt.Errorf("could not extract pod IP from server URL %q: %w", server.URL, err)
+		return "", fmt.Errorf("could not locate pod address (state.dns_name empty, URL parse failed: %w)", err)
 	}
 	return ip, nil
 }

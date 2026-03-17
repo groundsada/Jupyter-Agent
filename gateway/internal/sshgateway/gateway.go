@@ -83,11 +83,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authorization: token owner must match target username (or be admin)
+	// Authorization: token owner must match target username, or token must be admin.
+	// Service tokens (kind=="service") carry admin==true directly in TokenInfo;
+	// user tokens require a GetUser lookup to confirm the admin flag.
 	if tokenInfo.Name != username {
-		// Check if the token owner is an admin
-		ownerInfo, err := h.Hub.GetUser(r.Context(), tokenInfo.Name)
-		if err != nil || !ownerInfo.Admin {
+		isAdmin := tokenInfo.Admin // service tokens populate this directly
+		if !isAdmin && tokenInfo.Kind != "service" {
+			ownerInfo, err := h.Hub.GetUser(r.Context(), tokenInfo.Name)
+			if err == nil {
+				isAdmin = ownerInfo.Admin
+			}
+		}
+		if !isAdmin {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

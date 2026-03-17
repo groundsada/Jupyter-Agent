@@ -40,6 +40,11 @@ AllowUsers jovyan
 # Disable PAM — not available in minimal Alpine image
 UsePAM no
 
+# Disable strict mode checks on home directory permissions.
+# The shared PVC-mounted /home/jovyan is often owned by root with group-write
+# (setgid bit from the notebook image). sshd would reject key auth otherwise.
+StrictModes no
+
 # Run without privilege separation so sshd doesn't need SETUID/SETGID.
 # Safe here because the process already runs as the session user (jovyan).
 UsePrivilegeSeparation no
