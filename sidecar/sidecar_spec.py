@@ -19,6 +19,7 @@ def ssh_sidecar_container(
     memory_limit: str = "64Mi",
     cpu_request: str = "10m",
     memory_request: str = "16Mi",
+    home_volume_name: str = "home",
 ) -> dict:
     """
     Return a Kubernetes container spec dict for the SSH sidecar.
@@ -58,9 +59,10 @@ def ssh_sidecar_container(
         },
         "volumeMounts": [
             {
-                # Shared home dir — notebook container also mounts this.
-                # The sidecar reads/writes /home/jovyan just like the notebook.
-                "name": "home",
+                # Mount the same home volume as the notebook container so SSH
+                # sessions see /home/jovyan. The volume name is passed in from
+                # the hook after inspecting KubeSpawner's volume configuration.
+                "name": home_volume_name,
                 "mountPath": "/home/jovyan",
             }
         ],

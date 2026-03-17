@@ -68,34 +68,50 @@ def make_ssh_pre_spawn_hook(
             log.exception("jhub-ssh: Failed to get/create SSH key for %s — skipping sidecar", username)
             return
 
-        # ── 2. Build sidecar container spec ───────────────────────────────────
+        # ── 2. Determine the home volume name ─────────────────────────────────
+        # KubeSpawner creates the home PVC volume under its volumeNameTemplate
+        # (e.g. "volume-{escaped_username}"). We need the sidecar to mount
+        # that same volume. If spawner exposes pvc_name we can derive it;
+        # otherwise fall back to an emptyDir named "home".
+        home_vol_name = home_pvc_volume_name
+        if home_vol_name is None and hasattr(spawner, "pvc_name") and spawner.pvc_name:
+            # KubeSpawner names the volume after the PVC by convention.
+            # Check if a volumeNameTemplate is configured; otherwise use pvc_name.
+            vol_tpl = getattr(spawner, "storage_pvc_ensure", True)
+            if vol_tpl:
+                # Derive from spawner.volumes dict which KubeSpawner populates
+                # with the rendered volumeNameTemplate before hook runs.
+                spawner_volumes = getattr(spawner, "volumes", {}) or {}
+                for vname, vspec in spawner_volumes.items():
+                    if isinstance(vspec, dict) and "persistentVolumeClaim" in vspec:
+                        home_vol_name = vname
+                        break
+                if home_vol_name is None:
+                    # Fall back: KubeSpawner default is volume name == pvc_name
+                    home_vol_name = spawner.pvc_name
+
+        # ── 3. Build sidecar container spec ───────────────────────────────────
         sidecar = ssh_sidecar_container(
             authorized_key=public_key,
             image=sidecar_image,
             ssh_port=ssh_port,
+            home_volume_name=home_vol_name or "home",
         )
 
-        # ── 3. Attach sidecar to spawner ──────────────────────────────────────
+        # ── 4. Attach sidecar to spawner ──────────────────────────────────────
         existing = list(getattr(spawner, "extra_containers", None) or [])
-        # Avoid double-adding if hook is called twice (e.g., named servers)
         if not any(c.get("name") == "ssh-sidecar" for c in existing):
             existing.append(sidecar)
         spawner.extra_containers = existing
 
-        # ── 4. Ensure shared home volume exists ───────────────────────────────
+        # ── 5. Add home emptyDir only when there's no PVC ─────────────────────
         extra_volumes = list(getattr(spawner, "extra_volumes", None) or [])
-        extra_volume_mounts = list(getattr(spawner, "extra_volume_mounts", None) or [])
-
-        shared_vol = ssh_shared_volume(existing_home_volume_name=home_pvc_volume_name)
-        if shared_vol and not any(v.get("name") == "home" for v in extra_volumes):
-            extra_volumes.append(shared_vol)
-
-        # Add the home mount to the notebook container too (if not already there)
-        if not any(m.get("name") == "home" for m in extra_volume_mounts):
-            extra_volume_mounts.append(ssh_shared_volume_mount())
-
-        spawner.extra_volumes = extra_volumes
-        spawner.extra_volume_mounts = extra_volume_mounts
+        if home_vol_name is None:
+            # No PVC — add an emptyDir so containers can share /home/jovyan
+            shared_vol = ssh_shared_volume(existing_home_volume_name=None)
+            if shared_vol and not any(v.get("name") == "home" for v in extra_volumes):
+                extra_volumes.append(shared_vol)
+            spawner.extra_volumes = extra_volumes
 
         # ── 5. Expose SSH port info via environment ────────────────────────────
         env = dict(getattr(spawner, "environment", None) or {})
