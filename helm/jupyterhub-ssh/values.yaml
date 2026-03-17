@@ -35,7 +35,7 @@ gateway:
 
   image:
     repository: ghcr.io/groundsada/jhub-ssh-gateway
-    tag: "0.1.0"
+    tag: "0.1.3"
     pullPolicy: IfNotPresent
 
   # Port the SSH WebSocket relay listens on inside the container
@@ -65,7 +65,7 @@ gateway:
 sidecar:
   image:
     repository: ghcr.io/groundsada/jhub-ssh-sidecar
-    tag: "0.1.0"
+    tag: "0.1.3"
     pullPolicy: IfNotPresent
 
   # If users have a persistent home PVC, set the volume name here.

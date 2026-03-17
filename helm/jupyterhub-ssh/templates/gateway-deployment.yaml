@@ -17,6 +17,8 @@ spec:
       labels:
         app: jhub-ssh-gateway
         {{- include "jupyterhub-ssh.labels" . | nindent 8 }}
+        hub.jupyter.org/network-access-hub: "true"
+        hub.jupyter.org/network-access-singleuser: "true"
     spec:
       serviceAccountName: {{ .Values.gateway.serviceAccount.name }}
       securityContext:

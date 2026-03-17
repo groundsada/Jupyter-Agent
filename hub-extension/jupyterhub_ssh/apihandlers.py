@@ -107,7 +107,6 @@ class VSCodeConnectHandler(APIHandler):
         token = user.new_api_token(
             note="vscode-connect (short-lived)",
             expires_in=3600,
-            roles=[],
             scopes=[f"access:servers!user={username}"],
         )
 

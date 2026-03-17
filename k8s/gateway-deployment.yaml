@@ -44,6 +44,10 @@ spec:
     metadata:
       labels:
         app: jhub-ssh-gateway
+        # Required by JupyterHub NetworkPolicies to allow gateway→hub and
+        # gateway→singleuser-pod traffic.
+        hub.jupyter.org/network-access-hub: "true"
+        hub.jupyter.org/network-access-singleuser: "true"
     spec:
       serviceAccountName: jhub-ssh-gateway
       securityContext:

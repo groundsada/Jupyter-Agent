@@ -1,0 +1,26 @@
+# network-policy-patch.yaml
+#
+# JupyterHub (via its Helm chart) creates a "singleuser" NetworkPolicy that
+# restricts ingress to user pods. On clusters where JupyterHub manages this
+# policy, you must patch it to allow the SSH gateway to reach port 2222.
+#
+# Apply ONCE after deploying JupyterHub and this chart:
+#
+#   kubectl patch networkpolicy singleuser -n <namespace> \
+#     --type=json --patch-file=network-policy-patch.yaml
+#
+# Note: if you deploy via the jupyterhub-ssh Helm chart, the chart creates its
+# own "jhub-user-pod-ingress" NetworkPolicy that allows port 2222 independently.
+# This patch is only needed when that policy is insufficient (e.g., if the hub
+# chart's singleuser policy has Ingress policyType and blocks all other ingress).
+
+- op: add
+  path: /spec/ingress/-
+  value:
+    from:
+      - podSelector:
+          matchLabels:
+            hub.jupyter.org/network-access-singleuser: "true"
+    ports:
+      - port: 2222
+        protocol: TCP
