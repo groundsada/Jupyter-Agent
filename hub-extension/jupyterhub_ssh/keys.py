@@ -144,7 +144,10 @@ class KubernetesSecretKeyStore(SSHKeyStore):
 
     def _secret_name(self, username: str) -> str:
         # Kubernetes names must be lowercase alphanumeric or '-'
-        safe = username.lower().replace("_", "-").replace(".", "-")
+        import re
+        safe = username.lower()
+        safe = re.sub(r'[^a-z0-9]+', '-', safe)
+        safe = safe.strip('-')
         return f"jhub-ssh-pubkey-{safe}"
 
     async def get_public_key(self, username: str) -> Optional[str]:
