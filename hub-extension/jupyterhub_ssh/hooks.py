@@ -81,10 +81,10 @@ def make_ssh_pre_spawn_hook(
             if vol_tpl:
                 # Derive from spawner.volumes dict which KubeSpawner populates
                 # with the rendered volumeNameTemplate before hook runs.
-                spawner_volumes = getattr(spawner, "volumes", {}) or {}
-                for vname, vspec in spawner_volumes.items():
-                    if isinstance(vspec, dict) and "persistentVolumeClaim" in vspec:
-                        home_vol_name = vname
+                spawner_volumes = getattr(spawner, "volumes", []) or []
+                for vol in spawner_volumes:
+                    if isinstance(vol, dict) and "persistentVolumeClaim" in vol:
+                        home_vol_name = vol.get("name")
                         break
                 if home_vol_name is None:
                     # Fall back: KubeSpawner default is volume name == pvc_name
