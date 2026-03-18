@@ -233,12 +233,16 @@ jobs:
           python -m build
         working-directory: lab-extension
 
-      - name: Publish both packages to PyPI
+      - name: Collect dist files
+        run: |
+          mkdir -p combined-dist
+          cp hub-extension/dist/* combined-dist/
+          cp lab-extension/dist/* combined-dist/
+
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: |
-            hub-extension/dist/
-            lab-extension/dist/
+          packages-dir: combined-dist/
 
   # ── 6. Publish Helm chart to GitHub Pages (OCI) ─────────────────────────────
   publish-helm:
