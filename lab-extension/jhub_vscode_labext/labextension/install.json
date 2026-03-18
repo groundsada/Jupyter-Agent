@@ -1,0 +1,5 @@
+{
+  "packageManager": "python",
+  "packageName": "jhub-vscode-labext",
+  "uninstallInstructions": "Use your Python package manager (pip, conda, etc.) with the name of the Python package (jhub-vscode-labext)"
+}
